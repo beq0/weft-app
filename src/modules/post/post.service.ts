@@ -1,25 +1,42 @@
 import { Injectable } from '@nestjs/common';
 import { UserPostsQueryDto } from './dtos/user-posts-query.dto';
-import { AxiosInstance } from 'axios';
-import { HttpService } from '@nestjs/axios';
-import { IPostExternal } from './interfaces/post-external.interface';
+import { Post } from './post.entity';
+import { PostCheckService } from './post-check/post-check.service';
+import { PostExternalService } from './post-external/post-external.service';
+import { PostRepository } from './post.repository';
 
 @Injectable()
 export class PostService {
-  private readonly EXTERNAL_API_HOST = process.env.EXTERNAL_API_HOST;
-  private axios: AxiosInstance;
-
-  constructor(private readonly httpService: HttpService) {
-    this.axios = httpService.axiosRef as AxiosInstance;
-  }
+  constructor(
+    private readonly postCheckService: PostCheckService,
+    private readonly postExternalService: PostExternalService,
+    private readonly postRepository: PostRepository,
+  ) {}
 
   public async getUserPosts(
     userId: number,
     filterDto: UserPostsQueryDto,
-  ): Promise<IPostExternal> {
-    const response = await this.axios.get(
-      `${this.EXTERNAL_API_HOST}/posts?userId=${userId}`,
+  ): Promise<Post[]> {
+    const userHasCheckedPosts = await this.postCheckService.hasUserCheckedPosts(
+      userId,
     );
-    return response.data;
+    if (!userHasCheckedPosts) {
+      const externalPosts = await this.postExternalService.getUserPosts(userId);
+      await this.postRepository.save(externalPosts.map((post) => ({
+        userId: userId,
+        title: post.title,
+        body: post.body,
+      })));
+      await this.postCheckService.markCheckedForUser(userId);
+    }
+
+    return this.postRepository.getList({
+      ...filterDto,
+      userId,
+    });
+  }
+
+  public async deleteById(id: number): Promise<boolean> {
+    return this.postRepository.deleteById(id);
   }
 }
