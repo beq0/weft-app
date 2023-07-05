@@ -1,0 +1,11 @@
+services:
+  weft-db:
+    platform: linux/x86_64
+    image: mysql:5.7.42
+    environment:
+      MYSQL_DATABASE: 'weft-dev'
+      MYSQL_ROOT_PASSWORD: 'root'
+    ports:
+      - '3306:3306'
+    expose:
+      - '3306'
